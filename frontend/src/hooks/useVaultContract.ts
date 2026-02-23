@@ -447,6 +447,7 @@ export const useVaultContract = () => {
     };
 
     const editComment = async (commentId: string, text: string) => {
+    return { proposeTransfer, approveProposal, rejectProposal, executeProposal, getDashboardStats, getVaultEvents, loading };
     /**
      * Get balance for a specific token from the vault
      */
@@ -589,7 +590,7 @@ export const useVaultContract = () => {
             return { total: 0, change24h: 0 };
         }
     }, [getTokenBalances]);
-    const getProposalSignatures = useCallback(async (_proposalId: number) => {
+
     const getAllRoles = async (): Promise<Array<{ address: string; role: number }>> => {
         // Mock implementation - in production, this would query contract storage
         // or use events to build the role registry
@@ -649,58 +650,6 @@ export const useVaultContract = () => {
         }
     };
 
-    const getProposalComments = async (proposalId: string): Promise<Comment[]> => {
-        try {
-            const mockComments: Comment[] = [
-                {
-                    id: '1',
-                    proposalId,
-                    author: '0x123...456',
-                    text: 'This looks good to me. Ready to approve.',
-                    parentId: '0',
-                    createdAt: new Date().toISOString(),
-                    editedAt: '0',
-                },
-                {
-                    id: '2',
-                    proposalId,
-                    author: '0x789...012',
-                    text: 'Agreed! This will help with the upcoming campaign.',
-                    parentId: '1',
-                    createdAt: new Date().toISOString(),
-                    editedAt: '0',
-                },
-            ];
-            return mockComments;
-        } catch (e) {
-            console.error('Failed to fetch comments:', e);
-            return [];
-        }
-    };
-
-    return { 
-        proposeTransfer, 
-        approveProposal, 
-    return { 
-        proposeTransfer, 
-        rejectProposal, 
-        executeProposal, 
-        getDashboardStats, 
-        getVaultEvents, 
-        addComment, 
-        editComment, 
-        getProposalComments, 
-        loading 
-    };
-        getTokenBalance,
-        getTokenBalances,
-        getTokenInfo,
-        addCustomToken,
-        getPortfolioValue,
-        getProposalSignatures,
-        remindSigner,
-        exportSignatures,
-        loading 
     const getUserRole = async (): Promise<number> => {
         if (!isConnected || !address) return 0;
         try {
@@ -730,5 +679,39 @@ export const useVaultContract = () => {
         }
     };
 
-    return { proposeTransfer, rejectProposal, executeProposal, getDashboardStats, getVaultEvents, getAllRoles, setRole, getUserRole, getVaultBalance, loading };
+    // Stub functions for incomplete features
+    const getRecurringPayments = async () => [];
+    const getRecurringPaymentHistory = async (_paymentId: string) => [];
+    const schedulePayment = async (_params: CreateRecurringPaymentParams) => { throw new Error('Not implemented'); };
+    const executeRecurringPayment = async (_paymentId: string) => { throw new Error('Not implemented'); };
+    const cancelRecurringPayment = async (_paymentId: string) => { throw new Error('Not implemented'); };
+    const getProposalSignatures = async (_proposalId: number) => [];
+    const remindSigner = async (_proposalId: number, _signerAddress: string) => { throw new Error('Not implemented'); };
+    const exportSignatures = async (_proposalId: number) => { throw new Error('Not implemented'); };
+
+    return {
+        proposeTransfer, 
+        rejectProposal, 
+        executeProposal, 
+        getDashboardStats, 
+        getVaultEvents, 
+        getAllRoles, 
+        setRole, 
+        getUserRole, 
+        getVaultBalance,
+        getTokenBalance,
+        getTokenBalances,
+        getTokenInfo,
+        addCustomToken,
+        getPortfolioValue,
+        getRecurringPayments,
+        getRecurringPaymentHistory,
+        schedulePayment,
+        executeRecurringPayment,
+        cancelRecurringPayment,
+        getProposalSignatures,
+        remindSigner,
+        exportSignatures,
+        loading 
+    };
 };
