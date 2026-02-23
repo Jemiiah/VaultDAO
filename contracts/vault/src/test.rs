@@ -1067,8 +1067,9 @@ fn test_attachment_duplicate() {
         soroban_sdk::String::from_str(&env, "QmXyZ123456789abcdefghijklmnopqrstuvwxyz1234");
 
     client.add_attachment(&signer1, &proposal_id, &ipfs_hash);
-    // Adding duplicate should succeed (no duplicate check implemented)
-    client.add_attachment(&signer1, &proposal_id, &ipfs_hash);
+    // Adding duplicate returns AlreadyApproved
+    let result = client.try_add_attachment(&signer1, &proposal_id, &ipfs_hash);
+    assert_eq!(result.err(), Some(Ok(VaultError::AlreadyApproved)));
     // Attachments added successfully (no public getter to verify)
 }
 
@@ -1118,8 +1119,9 @@ fn test_attachment_invalid_hash() {
         &0i128,
     );
     let invalid_hash = soroban_sdk::String::from_str(&env, "Qm123");
-    // No hash validation implemented, should succeed
-    client.add_attachment(&signer1, &proposal_id, &invalid_hash);
+    // Hash validation rejects < 10 chars with InvalidAmount
+    let result = client.try_add_attachment(&signer1, &proposal_id, &invalid_hash);
+    assert_eq!(result.err(), Some(Ok(VaultError::InvalidAmount)));
     // Attachment added successfully (no public getter to verify)
 }
 #[test]
@@ -1605,12 +1607,7 @@ fn test_condition_date_after() {
     let proposal = client.get_proposal(&proposal_id);
     assert_eq!(proposal.status, ProposalStatus::Approved);
     assert_eq!(proposal.conditions.len(), 1);
-    env.ledger().set_sequence_number(201);
 
-    // Now should pass condition check (will fail on balance, but that's expected)
-    let result = client.try_execute_proposal(&admin, &proposal_id);
-    assert_ne!(result.err(), Some(Ok(VaultError::ConditionsNotMet)));
-=======
     // Execution should fail while ledger 100 < 200 (condition not met)
     let result = client.try_execute_proposal(&admin, &proposal_id);
     assert!(result.is_err());
@@ -1621,7 +1618,6 @@ fn test_condition_date_after() {
     // Now condition is met; execution may still fail on balance but must not fail with ConditionsNotMet
     let result = client.try_execute_proposal(&admin, &proposal_id);
     assert_ne!(result.err(), Some(Ok(VaultError::ConditionsNotMet)));
->>>>>>> main
 }
 
 #[test]
@@ -1686,16 +1682,8 @@ fn test_condition_multiple_and_logic() {
     let proposal = client.get_proposal(&proposal_id);
     assert_eq!(proposal.status, ProposalStatus::Approved);
     assert_eq!(proposal.conditions.len(), 2);
-    assert_eq!(proposal.condition_logic, ConditionLogic::And);    // Advance to valid window (150 <= 200 <= 250)
-    env.ledger().set_sequence_number(200);
-    let result = client.try_execute_proposal(&admin, &proposal_id);
-    assert_ne!(result.err(), Some(Ok(VaultError::ConditionsNotMet)));
+    assert_eq!(proposal.condition_logic, ConditionLogic::And);
 
-    // Advance past DateBefore (260 > 250)
-    env.ledger().set_sequence_number(260);
-    let result = client.try_execute_proposal(&admin, &proposal_id);
-    assert_eq!(result.err(), Some(Ok(VaultError::ConditionsNotMet)));
-=======
     // Execution should fail while ledger 100 < 150 (DateAfter not met)
     let result = client.try_execute_proposal(&admin, &proposal_id);
     assert!(result.is_err());
@@ -1709,7 +1697,6 @@ fn test_condition_multiple_and_logic() {
     env.ledger().set_sequence_number(260);
     let result = client.try_execute_proposal(&admin, &proposal_id);
     assert!(result.is_err());
->>>>>>> main
 }
 
 #[test]
@@ -1774,11 +1761,8 @@ fn test_condition_multiple_or_logic() {
     let proposal = client.get_proposal(&proposal_id);
     assert_eq!(proposal.status, ProposalStatus::Approved);
     assert_eq!(proposal.conditions.len(), 2);
-    assert_eq!(proposal.condition_logic, ConditionLogic::Or);    // Advance time - now one condition is met (ledger >= 200)
-    env.ledger().set_sequence_number(201);
-    let result = client.try_execute_proposal(&admin, &proposal_id);
-    assert_ne!(result.err(), Some(Ok(VaultError::ConditionsNotMet)));
-=======
+    assert_eq!(proposal.condition_logic, ConditionLogic::Or);
+
     // Execution should fail while neither condition met (ledger=100 < 200 and < 300)
     let result = client.try_execute_proposal(&admin, &proposal_id);
     assert!(result.is_err());
@@ -1787,7 +1771,6 @@ fn test_condition_multiple_or_logic() {
     env.ledger().set_sequence_number(201);
     let result = client.try_execute_proposal(&admin, &proposal_id);
     assert_ne!(result.err(), Some(Ok(VaultError::ConditionsNotMet)));
->>>>>>> main
 }
 
 #[test]
@@ -1847,7 +1830,6 @@ fn test_condition_no_conditions() {
     assert!(result.is_err());
     // Should not fail with ConditionsNotMet (empty conditions pass)
     assert_ne!(result.err(), Some(Ok(VaultError::ConditionsNotMet)));
->>>>>>> main
 }
 
 // ============================================================================
