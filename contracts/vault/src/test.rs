@@ -446,8 +446,8 @@ fn test_comment_functionality() {
         &0i128,
     );
 
-    // Add a comment
-    let comment_text = Symbol::new(&env, "LooksGood");
+    // Add a comment (Symbol does not allow spaces)
+    let comment_text = Symbol::new(&env, "Looksgood");
     let comment_id = client.add_comment(&signer1, &proposal_id, &comment_text, &0);
     assert_eq!(comment_id, 1);
 
@@ -465,8 +465,11 @@ fn test_comment_functionality() {
     let reply_id = client.add_comment(&admin, &proposal_id, &reply_text, &comment_id);
     assert_eq!(reply_id, 2);
 
+    // Advance ledger so edited_at will be non-zero
+    env.ledger().set_sequence_number(10);
+
     // Edit comment
-    let new_text = Symbol::new(&env, "NeedsReview");
+    let new_text = Symbol::new(&env, "Needsreview");
     client.edit_comment(&signer1, &comment_id, &new_text);
 
     let updated_comment = client.get_comment(&comment_id);
@@ -630,6 +633,7 @@ fn test_list_management() {
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
+    signers.push_back(address1.clone());
 
     let config = InitConfig {
         signers,
@@ -1550,16 +1554,18 @@ fn test_condition_date_after() {
 
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
+    let signer2 = Address::generate(&env);
     let user = Address::generate(&env);
     let token = Address::generate(&env);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
     signers.push_back(signer1.clone());
+    signers.push_back(signer2.clone());
 
     let config = InitConfig {
         signers,
-        threshold: 1,
+        threshold: 2,
         spending_limit: 1000,
         daily_limit: 5000,
         weekly_limit: 10000,
@@ -1573,6 +1579,7 @@ fn test_condition_date_after() {
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
+    client.set_role(&admin, &signer2, &Role::Treasurer);
 
     env.ledger().set_sequence_number(100);
 
@@ -1592,11 +1599,29 @@ fn test_condition_date_after() {
     );
 
     client.approve_proposal(&signer1, &proposal_id);
+    client.approve_proposal(&signer2, &proposal_id);
 
     // Proposal approved with conditions (execution would require mock token)
     let proposal = client.get_proposal(&proposal_id);
     assert_eq!(proposal.status, ProposalStatus::Approved);
     assert_eq!(proposal.conditions.len(), 1);
+    env.ledger().set_sequence_number(201);
+
+    // Now should pass condition check (will fail on balance, but that's expected)
+    let result = client.try_execute_proposal(&admin, &proposal_id);
+    assert_ne!(result.err(), Some(Ok(VaultError::ConditionsNotMet)));
+=======
+    // Execution should fail while ledger 100 < 200 (condition not met)
+    let result = client.try_execute_proposal(&admin, &proposal_id);
+    assert!(result.is_err());
+
+    // Advance time past the condition (ledger >= 200)
+    env.ledger().set_sequence_number(201);
+
+    // Now condition is met; execution may still fail on balance but must not fail with ConditionsNotMet
+    let result = client.try_execute_proposal(&admin, &proposal_id);
+    assert_ne!(result.err(), Some(Ok(VaultError::ConditionsNotMet)));
+>>>>>>> main
 }
 
 #[test]
@@ -1609,16 +1634,18 @@ fn test_condition_multiple_and_logic() {
 
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
+    let signer2 = Address::generate(&env);
     let user = Address::generate(&env);
     let token = Address::generate(&env);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
     signers.push_back(signer1.clone());
+    signers.push_back(signer2.clone());
 
     let config = InitConfig {
         signers,
-        threshold: 1,
+        threshold: 2,
         spending_limit: 1000,
         daily_limit: 5000,
         weekly_limit: 10000,
@@ -1632,6 +1659,7 @@ fn test_condition_multiple_and_logic() {
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
+    client.set_role(&admin, &signer2, &Role::Treasurer);
 
     env.ledger().set_sequence_number(100);
 
@@ -1652,12 +1680,36 @@ fn test_condition_multiple_and_logic() {
     );
 
     client.approve_proposal(&signer1, &proposal_id);
+    client.approve_proposal(&signer2, &proposal_id);
 
     // Proposal approved with AND logic conditions
     let proposal = client.get_proposal(&proposal_id);
     assert_eq!(proposal.status, ProposalStatus::Approved);
     assert_eq!(proposal.conditions.len(), 2);
-    assert_eq!(proposal.condition_logic, ConditionLogic::And);
+    assert_eq!(proposal.condition_logic, ConditionLogic::And);    // Advance to valid window (150 <= 200 <= 250)
+    env.ledger().set_sequence_number(200);
+    let result = client.try_execute_proposal(&admin, &proposal_id);
+    assert_ne!(result.err(), Some(Ok(VaultError::ConditionsNotMet)));
+
+    // Advance past DateBefore (260 > 250)
+    env.ledger().set_sequence_number(260);
+    let result = client.try_execute_proposal(&admin, &proposal_id);
+    assert_eq!(result.err(), Some(Ok(VaultError::ConditionsNotMet)));
+=======
+    // Execution should fail while ledger 100 < 150 (DateAfter not met)
+    let result = client.try_execute_proposal(&admin, &proposal_id);
+    assert!(result.is_err());
+
+    // Advance to valid window (150 <= 200 <= 250)
+    env.ledger().set_sequence_number(200);
+    let result = client.try_execute_proposal(&admin, &proposal_id);
+    assert_ne!(result.err(), Some(Ok(VaultError::ConditionsNotMet)));
+
+    // Advance past DateBefore (260 > 250) — execution should fail (condition or status)
+    env.ledger().set_sequence_number(260);
+    let result = client.try_execute_proposal(&admin, &proposal_id);
+    assert!(result.is_err());
+>>>>>>> main
 }
 
 #[test]
@@ -1670,16 +1722,18 @@ fn test_condition_multiple_or_logic() {
 
     let admin = Address::generate(&env);
     let signer1 = Address::generate(&env);
+    let signer2 = Address::generate(&env);
     let user = Address::generate(&env);
     let token = Address::generate(&env);
 
     let mut signers = Vec::new(&env);
     signers.push_back(admin.clone());
     signers.push_back(signer1.clone());
+    signers.push_back(signer2.clone());
 
     let config = InitConfig {
         signers,
-        threshold: 1,
+        threshold: 2,
         spending_limit: 1000,
         daily_limit: 5000,
         weekly_limit: 10000,
@@ -1693,6 +1747,7 @@ fn test_condition_multiple_or_logic() {
     };
     client.initialize(&admin, &config);
     client.set_role(&admin, &signer1, &Role::Treasurer);
+    client.set_role(&admin, &signer2, &Role::Treasurer);
 
     env.ledger().set_sequence_number(100);
 
@@ -1713,12 +1768,26 @@ fn test_condition_multiple_or_logic() {
     );
 
     client.approve_proposal(&signer1, &proposal_id);
+    client.approve_proposal(&signer2, &proposal_id);
 
     // Proposal approved with OR logic conditions
     let proposal = client.get_proposal(&proposal_id);
     assert_eq!(proposal.status, ProposalStatus::Approved);
     assert_eq!(proposal.conditions.len(), 2);
-    assert_eq!(proposal.condition_logic, ConditionLogic::Or);
+    assert_eq!(proposal.condition_logic, ConditionLogic::Or);    // Advance time - now one condition is met (ledger >= 200)
+    env.ledger().set_sequence_number(201);
+    let result = client.try_execute_proposal(&admin, &proposal_id);
+    assert_ne!(result.err(), Some(Ok(VaultError::ConditionsNotMet)));
+=======
+    // Execution should fail while neither condition met (ledger=100 < 200 and < 300)
+    let result = client.try_execute_proposal(&admin, &proposal_id);
+    assert!(result.is_err());
+
+    // Advance time - now one condition is met (ledger >= 200)
+    env.ledger().set_sequence_number(201);
+    let result = client.try_execute_proposal(&admin, &proposal_id);
+    assert_ne!(result.err(), Some(Ok(VaultError::ConditionsNotMet)));
+>>>>>>> main
 }
 
 #[test]
@@ -1774,4 +1843,9 @@ fn test_condition_no_conditions() {
     // Check proposal is approved (execution would require mock token contract)
     let proposal = client.get_proposal(&proposal_id);
     assert_eq!(proposal.status, ProposalStatus::Approved);
+    let result = client.try_execute_proposal(&admin, &proposal_id);
+    assert!(result.is_err());
+    // Should not fail with ConditionsNotMet (empty conditions pass)
+    assert_ne!(result.err(), Some(Ok(VaultError::ConditionsNotMet)));
+>>>>>>> main
 }
