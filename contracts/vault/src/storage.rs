@@ -36,6 +36,10 @@ pub enum DataKey {
     NextRecurringId,
     /// Proposer transfer timestamps for velocity checking (Address) -> Vec<u64>
     VelocityHistory(Address),
+    /// Cancellation record for a proposal -> CancellationRecord
+    CancellationRecord(u64),
+    /// List of all cancelled proposal IDs -> Vec<u64>
+    CancellationHistory,
     /// Recipient list mode -> ListMode
     ListMode,
     /// Whitelist flag for address -> bool
@@ -73,6 +77,8 @@ pub const DAY_IN_LEDGERS: u32 = 17_280; // ~24 hours
 pub const PROPOSAL_TTL: u32 = DAY_IN_LEDGERS * 7; // 7 days
 pub const INSTANCE_TTL: u32 = DAY_IN_LEDGERS * 30; // 30 days
 pub const INSTANCE_TTL_THRESHOLD: u32 = DAY_IN_LEDGERS * 7; // Extend when below 7 days
+pub const PERSISTENT_TTL: u32 = DAY_IN_LEDGERS * 30; // 30 days
+pub const PERSISTENT_TTL_THRESHOLD: u32 = DAY_IN_LEDGERS * 7; // Extend when below 7 days
 
 // ============================================================================
 // Initialization
@@ -384,6 +390,68 @@ pub fn check_and_update_velocity(env: &Env, addr: &Address, config: &VelocityCon
     true
 }
 
+pub fn set_cancellation_record(env: &Env, record: &crate::types::CancellationRecord) {
+    let key = DataKey::CancellationRecord(record.proposal_id);
+    env.storage().persistent().set(&key, record);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+pub fn get_cancellation_record(
+    env: &Env,
+    proposal_id: u64,
+) -> Result<crate::types::CancellationRecord, crate::errors::VaultError> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::CancellationRecord(proposal_id))
+        .ok_or(crate::errors::VaultError::ProposalNotFound)
+}
+
+pub fn add_to_cancellation_history(env: &Env, proposal_id: u64) {
+    let key = DataKey::CancellationHistory;
+    let mut history: soroban_sdk::Vec<u64> = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or(soroban_sdk::Vec::new(env));
+    history.push_back(proposal_id);
+    env.storage().persistent().set(&key, &history);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, PERSISTENT_TTL_THRESHOLD, PERSISTENT_TTL);
+}
+
+pub fn get_cancellation_history(env: &Env) -> soroban_sdk::Vec<u64> {
+    let key = DataKey::CancellationHistory;
+    env.storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or(soroban_sdk::Vec::new(env))
+}
+
+/// Refund spending limits when a proposal is cancelled
+pub fn refund_spending_limits(env: &Env, amount: i128) {
+    // Refund daily
+    let today = get_day_number(env);
+    let spent_today = get_daily_spent(env, today);
+    let refunded_daily = spent_today.saturating_sub(amount).max(0);
+    let key_daily = DataKey::DailySpent(today);
+    env.storage().temporary().set(&key_daily, &refunded_daily);
+    env.storage()
+        .temporary()
+        .extend_ttl(&key_daily, DAY_IN_LEDGERS * 2, DAY_IN_LEDGERS * 2);
+
+    // Refund weekly
+    let week = get_week_number(env);
+    let spent_week = get_weekly_spent(env, week);
+    let refunded_weekly = spent_week.saturating_sub(amount).max(0);
+    let key_weekly = DataKey::WeeklySpent(week);
+    env.storage().temporary().set(&key_weekly, &refunded_weekly);
+    env.storage()
+        .temporary()
+        .extend_ttl(&key_weekly, DAY_IN_LEDGERS * 14, DAY_IN_LEDGERS * 14);
+}
 // ============================================================================
 // Comments
 // ============================================================================

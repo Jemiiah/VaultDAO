@@ -83,6 +83,20 @@ pub fn emit_proposal_rejected(env: &Env, proposal_id: u64, rejector: &Address, p
     env.events().publish(
         (Symbol::new(env, "proposal_rejected"), proposal_id),
         (rejector.clone(), proposer.clone()),
+    ); // <-- semicolon added
+}
+
+/// Emit when a proposal is cancelled with a refund
+pub fn emit_proposal_cancelled(
+    env: &Env,
+    proposal_id: u64,
+    cancelled_by: &Address,
+    reason: &Symbol,
+    refunded_amount: i128,
+) {
+    env.events().publish(
+        (Symbol::new(env, "proposal_cancelled"), proposal_id),
+        (cancelled_by.clone(), reason.clone(), refunded_amount),
     );
 }
 

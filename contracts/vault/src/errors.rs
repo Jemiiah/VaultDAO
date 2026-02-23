@@ -79,6 +79,7 @@ pub enum VaultError {
     BalanceConditionFailed = 701,
     /// Date condition not satisfied
     DateConditionFailed = 702,
+    ProposalAlreadyCancelled = 703,
 
     // Recipient list errors (8xx)
     AddressAlreadyOnList = 800,

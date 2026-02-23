@@ -50,6 +50,17 @@ pub struct Config {
     pub threshold_strategy: ThresholdStrategy,
 }
 
+/// Audit record for a cancelled proposal
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct CancellationRecord {
+    pub proposal_id: u64,
+    pub cancelled_by: Address,
+    pub reason: Symbol,
+    pub cancelled_at_ledger: u64,
+    pub refunded_amount: i128,
+}
+
 /// Threshold strategy for dynamic approval requirements
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -114,6 +125,8 @@ pub enum ProposalStatus {
     Rejected = 3,
     /// Reached expiration ledger without hitting the approval threshold.
     Expired = 4,
+    /// Cancelled by proposer or admin, with spending refunded.
+    Cancelled = 5,
 }
 
 /// Proposal priority level for queue ordering

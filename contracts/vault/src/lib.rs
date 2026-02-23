@@ -559,6 +559,89 @@ impl VaultDAO {
         Ok(())
     }
 
+    /// Cancel a pending proposal and refund reserved spending limits.
+    ///
+    /// Only the original proposer or an Admin can cancel. Unlike rejection,
+    /// cancellation **refunds** the reserved daily/weekly spending amounts so
+    /// the capacity is available for future proposals.
+    ///
+    /// # Arguments
+    /// * `canceller` - Address initiating the cancellation (must authorize).
+    /// * `proposal_id` - ID of the proposal to cancel.
+    /// * `reason` - Short symbol describing why the proposal is being cancelled.
+    ///
+    /// # Returns
+    /// `Ok(())` on success, or a `VaultError` on failure.
+    pub fn cancel_proposal(
+        env: Env,
+        canceller: Address,
+        proposal_id: u64,
+        reason: Symbol,
+    ) -> Result<(), VaultError> {
+        canceller.require_auth();
+
+        let mut proposal = storage::get_proposal(&env, proposal_id)?;
+
+        // Guard: already cancelled
+        if proposal.status == ProposalStatus::Cancelled {
+            return Err(VaultError::ProposalAlreadyCancelled);
+        }
+
+        // Guard: only Pending proposals can be cancelled (Approved ones must use reject)
+        if proposal.status != ProposalStatus::Pending {
+            return Err(VaultError::ProposalNotPending);
+        }
+
+        // Authorization: only proposer or Admin
+        let role = storage::get_role(&env, &canceller);
+        if role != Role::Admin && canceller != proposal.proposer {
+            return Err(VaultError::Unauthorized);
+        }
+
+        // --- Refund spending limits ---
+        storage::refund_spending_limits(&env, proposal.amount);
+
+        // --- Update proposal status ---
+        proposal.status = ProposalStatus::Cancelled;
+        storage::set_proposal(&env, &proposal);
+
+        // --- Remove from priority queue ---
+        storage::remove_from_priority_queue(&env, proposal.priority.clone() as u32, proposal_id);
+
+        // --- Store cancellation record (audit trail) ---
+        let current_ledger = env.ledger().sequence() as u64;
+        let record = crate::types::CancellationRecord {
+            proposal_id,
+            cancelled_by: canceller.clone(),
+            reason: reason.clone(),
+            cancelled_at_ledger: current_ledger,
+            refunded_amount: proposal.amount,
+        };
+        storage::set_cancellation_record(&env, &record);
+        storage::add_to_cancellation_history(&env, proposal_id);
+        storage::extend_instance_ttl(&env);
+
+        // --- Emit event ---
+        events::emit_proposal_cancelled(&env, proposal_id, &canceller, &reason, proposal.amount);
+
+        Ok(())
+    }
+
+    /// Retrieve the cancellation record for a cancelled proposal.
+    ///
+    /// Useful for auditing: returns who cancelled, why, when, and how much was refunded.
+    pub fn get_cancellation_record(
+        env: Env,
+        proposal_id: u64,
+    ) -> Result<crate::types::CancellationRecord, VaultError> {
+        storage::get_cancellation_record(&env, proposal_id)
+    }
+
+    /// Retrieve the full cancellation history (list of cancelled proposal IDs).
+    pub fn get_cancellation_history(env: Env) -> soroban_sdk::Vec<u64> {
+        storage::get_cancellation_history(&env)
+    }
+
     // ========================================================================
     // Admin Functions
     // ========================================================================
