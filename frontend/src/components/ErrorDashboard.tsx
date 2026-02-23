@@ -3,7 +3,7 @@
  * Mobile responsive.
  */
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { AlertCircle, BarChart3, RefreshCw, Trash2 } from 'lucide-react';
 import { getErrorEvents, getErrorCountsByCode, getTotalErrorCount, clearErrorAnalytics, type ErrorEvent } from '../utils/errorAnalytics';
 import { getOfflineQueueLength, flushOfflineErrorQueue } from './ErrorReporting';

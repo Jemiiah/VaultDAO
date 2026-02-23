@@ -3,7 +3,7 @@
  * Mobile responsive.
  */
 
-import React, { Component, type ErrorInfo, type ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, WifiOff } from 'lucide-react';
 import { getUserFriendlyError } from '../utils/errorMapping';
 import { reportError } from './ErrorReporting';
@@ -126,10 +126,12 @@ class ErrorBoundaryClass extends Component<ErrorBoundaryProps, ErrorBoundaryStat
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    reportError(
-      { code: 'BOUNDARY', message: error.message, stack: error.stack },
-      errorInfo.componentStack ?? undefined
-    );
+    reportError({
+      code: 'BOUNDARY',
+      message: error.message,
+      stack: error.stack,
+      context: errorInfo.componentStack ?? undefined,
+    });
     this.props.onError?.(error, errorInfo);
   }
 

@@ -203,7 +203,7 @@ const Proposals: React.FC = () => {
       notify('proposal_rejected', `Proposal #${rejectingId} rejected`, 'success');
     } catch (err: unknown) {
       const vaultErr = parseError(err);
-      reportError(vaultErr, 'Proposals.handleReject');
+      reportError({ ...vaultErr, context: 'Proposals.handleReject' });
       const errorMessage = err instanceof Error ? err.message : 'Failed to reject';
       notify('proposal_rejected', errorMessage, 'error');
     } finally {
@@ -238,7 +238,7 @@ const Proposals: React.FC = () => {
       notify('proposal_approved', `Proposal #${proposalId} approved successfully`, 'success');
     } catch (err: unknown) {
       const vaultErr = parseError(err);
-      reportError(vaultErr, 'Proposals.handleApprove');
+      reportError({ ...vaultErr, context: 'Proposals.handleApprove' });
       const errorMessage = err instanceof Error ? err.message : 'Failed to approve proposal';
       notify('proposal_rejected', errorMessage, 'error');
     } finally {

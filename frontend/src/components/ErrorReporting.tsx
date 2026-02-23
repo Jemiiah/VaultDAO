@@ -66,15 +66,12 @@ async function sendToBackend(payload: ReportPayload): Promise<boolean> {
 /**
  * Report an error: record for analytics, queue if offline, send to backend if online.
  */
-export function reportError(
-  error: VaultError | ReportPayload,
-  context?: string
-): void {
+export function reportError(error: VaultError | ReportPayload): void {
   const payload: ReportPayload = {
     code: 'code' in error ? error.code : 'UNKNOWN',
     message: 'message' in error ? error.message : String(error),
-    stack: 'stack' in error ? (error as Error).stack : undefined,
-    context,
+    stack: 'stack' in error ? (error as { stack?: string }).stack : undefined,
+    context: 'context' in error ? error.context : undefined,
     retryCount: 'retryCount' in error ? (error as ReportPayload).retryCount : undefined,
   };
 

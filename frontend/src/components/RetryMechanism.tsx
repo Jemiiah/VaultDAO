@@ -48,7 +48,7 @@ export async function withRetry<T>(
       return await fn();
     } catch (e) {
       lastError = e;
-      if (attempt === maxAttempts || !retryable(e)) throw e;
+      if (attempt === maxAttempts || !(retryable ? retryable(e) : true)) throw e;
       await delay(Math.min(delayMs, maxDelayMs));
       delayMs *= backoffMultiplier;
     }
