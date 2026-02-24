@@ -98,7 +98,8 @@ class PerformanceTracker {
   }
 
   private initializeMemoryMonitoring(): void {
-    if ((performance as any).memory) {
+    const perf = performance as unknown as Record<string, unknown>;
+    if (perf.memory) {
       this.memoryCheckInterval = setInterval(() => {
         const memory = this.getMemoryMetrics();
         this.memorySnapshots.push(memory);
@@ -115,7 +116,8 @@ class PerformanceTracker {
   }
 
   private getMemoryMetrics(): MemoryMetrics {
-    const memory = (performance as any).memory;
+    const perf = performance as unknown as Record<string, unknown>;
+    const memory = perf.memory;
     if (!memory) {
       return {
         usedJSHeapSize: 0,
@@ -125,11 +127,12 @@ class PerformanceTracker {
       };
     }
 
+    const memObj = memory as Record<string, number>;
     return {
-      usedJSHeapSize: memory.usedJSHeapSize,
-      totalJSHeapSize: memory.totalJSHeapSize,
-      jsHeapSizeLimit: memory.jsHeapSizeLimit,
-      percentageUsed: (memory.usedJSHeapSize / memory.jsHeapSizeLimit) * 100,
+      usedJSHeapSize: memObj.usedJSHeapSize,
+      totalJSHeapSize: memObj.totalJSHeapSize,
+      jsHeapSizeLimit: memObj.jsHeapSizeLimit,
+      percentageUsed: (memObj.usedJSHeapSize / memObj.jsHeapSizeLimit) * 100,
     };
   }
 
@@ -219,11 +222,15 @@ class PerformanceTracker {
   }
 
   private reportMetric(name: string, value: number): void {
-    if (typeof window !== 'undefined' && (window as any).gtag) {
-      (window as any).gtag('event', `web_vital_${name.toLowerCase()}`, {
-        value: Math.round(value),
-        event_category: 'web_vitals',
-      });
+    if (typeof window !== 'undefined') {
+      const win = window as unknown as Record<string, unknown>;
+      if (win.gtag) {
+        const gtag = win.gtag as (event: string, name: string, data: Record<string, unknown>) => void;
+        gtag('event', `web_vital_${name.toLowerCase()}`, {
+          value: Math.round(value),
+          event_category: 'web_vitals',
+        });
+      }
     }
   }
 

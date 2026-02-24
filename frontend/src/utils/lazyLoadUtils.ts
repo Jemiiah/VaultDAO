@@ -24,18 +24,20 @@ export function lazyLoadComponent<P extends object>(
  * Useful for improving perceived performance
  */
 export function preloadComponent(
-  importFunc: () => Promise<{ default: ComponentType<any> }>
+  importFunc: () => Promise<{ default: ComponentType<unknown> }>
 ): void {
   if (typeof window !== 'undefined') {
     // Use requestIdleCallback if available, otherwise use setTimeout
     const callback = () => {
-      importFunc().catch((error) => {
+      importFunc().catch((error: unknown) => {
         console.warn('Failed to preload component:', error);
       });
     };
 
-    if ('requestIdleCallback' in window) {
-      (window as any).requestIdleCallback(callback, { timeout: 2000 });
+    const win = window as unknown as Record<string, unknown>;
+    if ('requestIdleCallback' in win) {
+      const requestIdleCallback = win.requestIdleCallback as (callback: () => void, options: Record<string, number>) => void;
+      requestIdleCallback(callback, { timeout: 2000 });
     } else {
       setTimeout(callback, 1000);
     }

@@ -29,8 +29,8 @@ export function usePerformanceMonitoring(componentName: string): void {
  * Hook to track API call performance
  */
 export function useApiTracking(
-  apiCall: () => Promise<any>,
-  dependencies: any[] = []
+  apiCall: () => Promise<unknown>,
+  dependencies: unknown[] = []
 ): void {
   useEffect(() => {
     const startTime = performance.now();
@@ -46,7 +46,7 @@ export function useApiTracking(
           );
         }
       })
-      .catch((error) => {
+      .catch((error: unknown) => {
         const duration = performance.now() - startTime;
         performanceTracker.trackSlowQuery(
           `API Call in component (FAILED)`,
@@ -55,6 +55,7 @@ export function useApiTracking(
         );
         console.error('API call failed:', error);
       });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, dependencies);
 }
 
@@ -63,15 +64,17 @@ export function useApiTracking(
  */
 export function useMemoryMonitoring(componentName: string): void {
   useEffect(() => {
-    if (!(performance as any).memory) {
+    const perf = performance as unknown as Record<string, unknown>;
+    if (!perf.memory) {
       return;
     }
 
-    const initialMemory = (performance as any).memory.usedJSHeapSize;
+    const memory = perf.memory as Record<string, number>;
+    const initialMemory = memory.usedJSHeapSize;
 
     return () => {
-      const finalMemory = (performance as any).memory.usedJSHeapSize;
-      const memoryDelta = finalMemory - initialMemory;
+      const finalMemory = (performance as unknown as Record<string, unknown>).memory as Record<string, number>;
+      const memoryDelta = finalMemory.usedJSHeapSize - initialMemory;
 
       if (Math.abs(memoryDelta) > 1000000) {
         // More than 1MB change

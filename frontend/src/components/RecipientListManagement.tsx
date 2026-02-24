@@ -23,6 +23,7 @@ export default function RecipientListManagement({ onClose }: RecipientListManage
 
     useEffect(() => {
         loadListMode();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const loadListMode = async () => {

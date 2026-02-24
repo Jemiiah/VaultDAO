@@ -49,7 +49,10 @@ const ProposalDetailModal: React.FC<ProposalDetailModalProps> = ({ isOpen, onClo
     }, [isOpen]);
 
     useEffect(() => {
-        if (isOpen) setActiveTab('details');
+        if (isOpen) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setActiveTab('details');
+        }
     }, [isOpen]);
 
     if (!isOpen || !proposal) return null;

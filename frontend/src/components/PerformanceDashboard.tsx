@@ -11,6 +11,48 @@ interface MetricsHistory {
   memory?: number;
 }
 
+interface MetricCardProps {
+  label: string;
+  value?: number;
+  unit: string;
+  status: 'good' | 'warning' | 'poor';
+}
+
+function MetricCard({ label, value, unit, status }: MetricCardProps) {
+  const getStatusColor = (status: 'good' | 'warning' | 'poor'): string => {
+    switch (status) {
+      case 'good':
+        return 'text-green-600 bg-green-50';
+      case 'warning':
+        return 'text-yellow-600 bg-yellow-50';
+      case 'poor':
+        return 'text-red-600 bg-red-50';
+    }
+  };
+
+  const getStatusBadgeColor = (status: 'good' | 'warning' | 'poor'): string => {
+    switch (status) {
+      case 'good':
+        return 'bg-green-100 text-green-800';
+      case 'warning':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'poor':
+        return 'bg-red-100 text-red-800';
+    }
+  };
+
+  return (
+    <div className={`p-4 rounded-lg border ${getStatusColor(status)}`}>
+      <div className="text-sm font-medium mb-1">{label}</div>
+      <div className="text-2xl font-bold">{value?.toFixed(2) ?? 'N/A'}</div>
+      <div className="text-xs mt-1">{unit}</div>
+      <span className={`inline-block mt-2 px-2 py-1 rounded text-xs font-medium ${getStatusBadgeColor(status)}`}>
+        {status.toUpperCase()}
+      </span>
+    </div>
+  );
+}
+
 export default function PerformanceDashboard() {
   const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null);
   const [recommendations, setRecommendations] = useState<string[]>([]);
@@ -61,39 +103,6 @@ export default function PerformanceDashboard() {
         return 'good';
     }
   };
-
-  const getStatusColor = (status: 'good' | 'warning' | 'poor'): string => {
-    switch (status) {
-      case 'good':
-        return 'text-green-600 bg-green-50';
-      case 'warning':
-        return 'text-yellow-600 bg-yellow-50';
-      case 'poor':
-        return 'text-red-600 bg-red-50';
-    }
-  };
-
-  const getStatusBadgeColor = (status: 'good' | 'warning' | 'poor'): string => {
-    switch (status) {
-      case 'good':
-        return 'bg-green-100 text-green-800';
-      case 'warning':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'poor':
-        return 'bg-red-100 text-red-800';
-    }
-  };
-
-  const MetricCard = ({ label, value, unit, status }: { label: string; value?: number; unit: string; status: 'good' | 'warning' | 'poor' }) => (
-    <div className={`p-4 rounded-lg border ${getStatusColor(status)}`}>
-      <div className="text-sm font-medium mb-1">{label}</div>
-      <div className="text-2xl font-bold">{value?.toFixed(2) ?? 'N/A'}</div>
-      <div className="text-xs mt-1">{unit}</div>
-      <span className={`inline-block mt-2 px-2 py-1 rounded text-xs font-medium ${getStatusBadgeColor(status)}`}>
-        {status.toUpperCase()}
-      </span>
-    </div>
-  );
 
   return (
     <div className="w-full bg-white rounded-lg shadow-lg p-4 md:p-6">
