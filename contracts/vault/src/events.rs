@@ -401,3 +401,37 @@ pub fn emit_retries_exhausted(env: &Env, proposal_id: u64, total_attempts: u32) 
         total_attempts,
     );
 }
+
+// ============================================================================
+// Dispute Resolution Events (feature/dispute-resolution)
+// ============================================================================
+
+/// Emit when a dispute is filed against a proposal
+pub fn emit_dispute_filed(env: &Env, dispute_id: u64, proposal_id: u64, disputer: &Address) {
+    env.events().publish(
+        (Symbol::new(env, "dispute_filed"), dispute_id),
+        (proposal_id, disputer.clone()),
+    );
+}
+
+/// Emit when a dispute is resolved by an arbitrator
+pub fn emit_dispute_resolved(
+    env: &Env,
+    dispute_id: u64,
+    proposal_id: u64,
+    arbitrator: &Address,
+    resolution: u32,
+) {
+    env.events().publish(
+        (Symbol::new(env, "dispute_resolved"), dispute_id),
+        (proposal_id, arbitrator.clone(), resolution),
+    );
+}
+
+/// Emit when arbitrator list is updated
+pub fn emit_arbitrators_updated(env: &Env, admin: &Address, count: u32) {
+    env.events().publish(
+        (Symbol::new(env, "arbitrators_updated"),),
+        (admin.clone(), count),
+    );
+}

@@ -91,8 +91,8 @@ pub enum VaultError {
     ChainNotSupported = 173,
     ExceedsBridgeLimit = 175,
 
-    // Reputation
-    ReputationTooLow = 180,
+    // Dispute
+    DisputeNotFound = 180,
 
     // Retry errors
     MaxRetriesExceeded = 190,
