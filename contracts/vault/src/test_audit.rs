@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use super::*;
 use crate::types::{
     AuditAction, Condition, ConditionLogic, ListMode, Priority, ThresholdStrategy, VelocityConfig,
@@ -14,7 +12,7 @@ use soroban_sdk::{
 // Helper Functions
 // ============================================================================
 
-fn setup_test_environment(env: &Env) -> (VaultDAOClient, Address, Address, Address) {
+fn setup_test_environment(env: &Env) -> (VaultDAOClient<'_>, Address, Address, Address) {
     let contract_id = env.register(VaultDAO, ());
     let client = VaultDAOClient::new(env, &contract_id);
 
@@ -140,7 +138,7 @@ fn test_audit_trail_verification() {
 
     // Verify entire audit trail
     let is_valid = client.verify_audit_trail(&1, &2);
-    assert_eq!(is_valid, true);
+    assert!(is_valid);
 }
 
 #[test]
@@ -189,7 +187,7 @@ fn test_audit_trail_core_actions() {
 
     // Verify entire chain
     let is_valid = client.verify_audit_trail(&1, &6);
-    assert_eq!(is_valid, true);
+    assert!(is_valid);
 }
 
 // ============================================================================
@@ -409,7 +407,7 @@ fn test_audit_chain_integrity_stress_test() {
 
     // Verify using built-in verification
     let is_valid = client.verify_audit_trail(&1, &10);
-    assert_eq!(is_valid, true, "Audit trail verification failed");
+    assert!(is_valid, "Audit trail verification failed");
 }
 
 // ============================================================================
@@ -425,7 +423,7 @@ fn test_audit_trail_empty_range() {
 
     // Verify audit trail with single entry
     let is_valid = client.verify_audit_trail(&1, &1);
-    assert_eq!(is_valid, true);
+    assert!(is_valid);
 }
 
 #[test]

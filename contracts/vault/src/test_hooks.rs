@@ -1,5 +1,3 @@
-#![cfg(test)]
-
 use super::*;
 use crate::types::{RetryConfig, ThresholdStrategy, VelocityConfig};
 use crate::{InitConfig, VaultDAO, VaultDAOClient};
