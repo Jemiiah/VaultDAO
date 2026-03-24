@@ -1622,6 +1622,24 @@ impl VaultDAO {
         storage::get_config(&env)
     }
 
+    /// Get the current signer set.
+    ///
+    /// Returns a vector of all current signer addresses. This is useful for
+    /// clients to display the current signer list without needing to infer
+    /// signers from raw config shape or off-chain assumptions.
+    ///
+    /// # Returns
+    /// * `Vec<Address>` - Current list of authorized signers
+    ///
+    /// # Errors
+    /// Returns [`VaultError::NotInitialized`] if the vault has not been
+    /// initialized yet.
+    pub fn get_signers(env: Env) -> Result<Vec<Address>, VaultError> {
+        storage::extend_instance_ttl(&env);
+        let config = storage::get_config(&env)?;
+        Ok(config.signers)
+    }
+
     /// Assign a role to an address.
     ///
     /// Only an account with the `Admin` role can call this function.
