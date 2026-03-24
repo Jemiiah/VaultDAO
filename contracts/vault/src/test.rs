@@ -7047,47 +7047,6 @@ fn test_fees_collected_tracking() {
     // In a full integration test, we would execute proposals
     // and verify fees are collected
 }
-
-    let mut veto_addresses = Vec::new(&env);
-    veto_addresses.push_back(vetoer.clone());
-
-    let config = InitConfig {
-        signers,
-        threshold: 2,
-        spending_limit: 1000,
-        daily_limit: 5000,
-        weekly_limit: 10000,
-        timelock_threshold: 5000,
-        timelock_delay: 100,
-        threshold_strategy: ThresholdStrategy::Fixed,
-        veto_addresses,
-    };
-    client.initialize(&admin, &config);
-    client.set_role(&admin, &signer1, &Role::Treasurer);
-    client.set_role(&admin, &signer2, &Role::Treasurer);
-
-    let proposal_id = client.propose_transfer(
-        &signer1,
-        &user,
-        &token,
-        &100,
-        &Symbol::new(&env, "veto"),
-        &Priority::Critical,
-        &Vec::new(&env),
-        &ConditionLogic::And,
-    );
-
-    client.approve_proposal(&signer1, &proposal_id);
-    client.approve_proposal(&signer2, &proposal_id);
-    assert_eq!(
-        client.get_proposal(&proposal_id).status,
-        ProposalStatus::Approved
-    );
-
-    client.veto_proposal(&vetoer, &proposal_id);
-    assert_eq!(client.get_proposal(&proposal_id).status, ProposalStatus::Vetoed);
-
-    let res = client.try_execute_proposal(&admin, &proposal_id);
     assert_eq!(res.err(), Some(Ok(VaultError::ProposalNotApproved)));
 
 #[test]
