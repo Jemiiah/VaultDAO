@@ -139,7 +139,7 @@ test("Rate Limiter", async (t) => {
       headers: {},
       socket: { remoteAddress: ip },
       get: () => undefined,
-    } as unknown as Request;
+    }) as unknown as Request;
 
     let nextCalled = 0;
     const next = () => {
