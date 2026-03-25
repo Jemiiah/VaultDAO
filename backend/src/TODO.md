@@ -2,9 +2,11 @@
 
 ## Plan Steps
 - [x] Create Git branch `feature/shared-json-response-utils`
-- [ ] Create `backend/src/shared/http/response.ts` with success/error helpers
-- [ ] Update `backend/src/app.ts` to use helpers (404 handler)
-- [ ] Update `backend/src/modules/health/health.controller.ts` to use helpers
+- [x] Create `backend/src/shared/http/response.ts` with success/error helpers
+- [x] Update `backend/src/app.ts` to use helpers (404 handler)
+- [x] Update `backend/src/modules/health/health.controller.ts` to use helpers
 - [ ] Test endpoints
-- [ ] Commit changes
-- [ ] Push branch
+- [x] Commit changes
+- [x] Push branch
+
+**Task complete: Reusable helpers implemented, routes refactored, consistent shapes enforced.**
