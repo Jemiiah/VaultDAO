@@ -1,8 +1,11 @@
 use super::*;
-use crate::types::{AmountTier, RetryConfig, ThresholdStrategy, VelocityConfig};
+use crate::types::{
+    AmountTier, ConditionLogic, Priority, RetryConfig, ThresholdStrategy, VelocityConfig,
+};
 use crate::{InitConfig, VaultDAO, VaultDAOClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
+    token::StellarAssetClient,
     Address, Env, Symbol, Vec,
 };
 
@@ -35,7 +38,7 @@ fn init_config(
             max_retries: 0,
             initial_backoff_ledgers: 0,
         },
-        recovery_config: crate::types::RecoveryConfig::default(env),
+        recovery_config: RecoveryConfig::default(env),
         staking_config: types::StakingConfig::default(),
     }
 }
@@ -55,7 +58,7 @@ fn test_amount_based_threshold_strategy_boundaries() {
     let token = env
         .register_stellar_asset_contract_v2(admin.clone())
         .address();
-    let token_client = soroban_sdk::token::StellarAssetClient::new(&env, &token);
+    let token_client = StellarAssetClient::new(&env, &token);
     token_client.mint(&contract_id, &100_000);
 
     let mut signers = Vec::new(&env);
@@ -152,7 +155,7 @@ fn test_daily_limit_recovers_after_proposal_expiry() {
     let token = env
         .register_stellar_asset_contract_v2(admin.clone())
         .address();
-    soroban_sdk::token::StellarAssetClient::new(&env, &token).mint(&contract_id, &200_000);
+    StellarAssetClient::new(&env, &token).mint(&contract_id, &200_000);
 
     // daily_limit = 100_000, spending_limit = 10_000
     client.initialize(
@@ -162,7 +165,7 @@ fn test_daily_limit_recovers_after_proposal_expiry() {
 
     // Propose 10 transfers of 10_000 each — fills the daily limit exactly
     let amount: i128 = 10_000;
-    let mut proposal_ids = soroban_sdk::Vec::new(&env);
+    let mut proposal_ids = Vec::new(&env);
     for _ in 0..10 {
         let id = client.propose_transfer(
             &admin,
@@ -170,9 +173,9 @@ fn test_daily_limit_recovers_after_proposal_expiry() {
             &token,
             &amount,
             &Symbol::new(&env, "pay"),
-            &crate::types::Priority::Normal,
-            &soroban_sdk::Vec::new(&env),
-            &crate::types::ConditionLogic::And,
+            &Priority::Normal,
+            &Vec::new(&env),
+            &ConditionLogic::And,
             &0i128,
         );
         proposal_ids.push_back(id);
@@ -185,9 +188,9 @@ fn test_daily_limit_recovers_after_proposal_expiry() {
         &token,
         &amount,
         &Symbol::new(&env, "pay"),
-        &crate::types::Priority::Normal,
-        &soroban_sdk::Vec::new(&env),
-        &crate::types::ConditionLogic::And,
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
         &0i128,
     );
     assert!(result.is_err(), "expected daily limit to be exhausted");
@@ -223,9 +226,9 @@ fn test_daily_limit_recovers_after_proposal_expiry() {
         &token,
         &amount,
         &Symbol::new(&env, "pay"),
-        &crate::types::Priority::Normal,
-        &soroban_sdk::Vec::new(&env),
-        &crate::types::ConditionLogic::And,
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
         &0i128,
     );
     assert!(
@@ -255,7 +258,7 @@ fn test_expiry_refund_is_idempotent() {
     let token = env
         .register_stellar_asset_contract_v2(admin.clone())
         .address();
-    soroban_sdk::token::StellarAssetClient::new(&env, &token).mint(&contract_id, &100_000);
+    StellarAssetClient::new(&env, &token).mint(&contract_id, &100_000);
 
     client.initialize(
         &admin,
@@ -269,9 +272,9 @@ fn test_expiry_refund_is_idempotent() {
         &token,
         &amount,
         &Symbol::new(&env, "pay"),
-        &crate::types::Priority::Normal,
-        &soroban_sdk::Vec::new(&env),
-        &crate::types::ConditionLogic::And,
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
         &0i128,
     );
 
@@ -324,7 +327,7 @@ fn test_cancellation_refund_path_unaffected() {
     let token = env
         .register_stellar_asset_contract_v2(admin.clone())
         .address();
-    soroban_sdk::token::StellarAssetClient::new(&env, &token).mint(&contract_id, &100_000);
+    StellarAssetClient::new(&env, &token).mint(&contract_id, &100_000);
 
     client.initialize(
         &admin,
@@ -338,9 +341,9 @@ fn test_cancellation_refund_path_unaffected() {
         &token,
         &amount,
         &Symbol::new(&env, "pay"),
-        &crate::types::Priority::Normal,
-        &soroban_sdk::Vec::new(&env),
-        &crate::types::ConditionLogic::And,
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
         &0i128,
     );
 
@@ -354,9 +357,9 @@ fn test_cancellation_refund_path_unaffected() {
         &token,
         &amount,
         &Symbol::new(&env, "pay"),
-        &crate::types::Priority::Normal,
-        &soroban_sdk::Vec::new(&env),
-        &crate::types::ConditionLogic::And,
+        &Priority::Normal,
+        &Vec::new(&env),
+        &ConditionLogic::And,
         &0i128,
     );
     assert!(
