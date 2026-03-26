@@ -1,8 +1,11 @@
 // frontend/src/hooks/useProposals.ts
 
 import { useState, useEffect, useCallback } from 'react';
-// import { useVaultContract } from './useVaultContract';
-import type { Proposal, ProposalStatus } from '../components/type';
+import { withRetry } from '../utils/retryUtils';
+import { useVaultContract } from './useVaultContract';
+import type { Proposal } from '../app/dashboard/Proposals';
+
+type ProposalStatus = Proposal['status'];
 
 interface UseProposalsReturn {
   proposals: Proposal[];
@@ -17,58 +20,37 @@ export const useProposals = (): UseProposalsReturn => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // const { getProposals } = useVaultContract();
-  // TODO: Implement getProposals in useVaultContract
+  const { getProposals } = useVaultContract();
 
-  /**
-   * Fetch proposals from contract
-   */
   const fetchProposals = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // TODO: Replace with actual contract call when getProposals is implemented
-      // const data = await getProposals();
-      // setProposals(data);
-      
-      // For now, return empty array
-      setProposals([]);
-
+      await withRetry(async () => {
+        const data = await getProposals();
+        setProposals(data);
+      }, { maxAttempts: 3, initialDelayMs: 1000 });
     } catch (err) {
       console.error('Error fetching proposals:', err);
       setError(
-        err instanceof Error 
-          ? err.message 
+        err instanceof Error
+          ? err.message
           : 'Failed to load proposals. Please try again.'
       );
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getProposals]);
 
-  /**
-   * Filter proposals by status
-   */
   const filterByStatus = (status: ProposalStatus | 'all'): Proposal[] => {
-    if (status === 'all') {
-      return proposals;
-    }
+    if (status === 'all') return proposals;
     return proposals.filter(p => p.status === status);
   };
 
-  /**
-   * Fetch on mount
-   */
   useEffect(() => {
     void fetchProposals();
   }, [fetchProposals]);
 
-  return {
-    proposals,
-    loading,
-    error,
-    refetch: fetchProposals,
-    filterByStatus
-  };
+  return { proposals, loading, error, refetch: fetchProposals, filterByStatus };
 };

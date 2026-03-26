@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { AuditEntry } from './auditVerification';
+import { stripHtml } from './pdfExport';
 
 export type ReportType = 'SOC2' | 'ISO27001' | 'Custom';
 
@@ -62,12 +63,12 @@ function generateSOC2ReportPDF(config: ReportConfig, data: ReportData): jsPDF {
     
     const tableData = data.entries.slice(0, 50).map(entry => [
       new Date(entry.timestamp).toLocaleDateString(),
-      entry.user.slice(0, 12) + '...',
-      entry.action,
-      entry.transactionHash.slice(0, 12) + '...',
+      stripHtml(entry.user).slice(0, 12) + '...',
+      stripHtml(entry.action),
+      stripHtml(entry.transactionHash).slice(0, 12) + '...',
     ]);
     
-    autoTable(doc, {
+    autoTable(doc as unknown as import('jspdf').jsPDF, {
       startY: yPos,
       head: [['Date', 'User', 'Action', 'Transaction']],
       body: tableData,
@@ -76,7 +77,8 @@ function generateSOC2ReportPDF(config: ReportConfig, data: ReportData): jsPDF {
       headStyles: { fillColor: [88, 28, 135] },
     });
     
-    yPos = (doc as any).lastAutoTable.finalY + 15;
+    const docObj = doc as unknown as Record<string, unknown>;
+    yPos = (docObj.lastAutoTable as number) + 15;
   }
   
   if (config.includeSections.complianceChecks) {
@@ -161,10 +163,10 @@ function generateISO27001ReportPDF(config: ReportConfig, data: ReportData): jsPD
   yPos += 10;
   
   const actionTypes = Object.entries(data.summary.actionsByType);
-  autoTable(doc, {
+  autoTable(doc as unknown as import('jspdf').jsPDF, {
     startY: yPos,
     head: [['Action Type', 'Count']],
-    body: actionTypes.map(([type, count]) => [type, count.toString()]),
+    body: actionTypes.map(([type, count]) => [stripHtml(type), count.toString()]),
     theme: 'grid',
     styles: { fontSize: 9 },
     headStyles: { fillColor: [88, 28, 135] },
@@ -177,14 +179,31 @@ function generateISO27001ReportPDF(config: ReportConfig, data: ReportData): jsPD
 }
 
 export function exportToCSV(entries: AuditEntry[]): Blob {
-  const headers = ['Timestamp', 'Ledger', 'User', 'Action', 'Details', 'Transaction Hash'];
+  const headers = [
+    'Timestamp',
+    'Ledger',
+    'ContractId',
+    'User',
+    'Action',
+    'Details',
+    'TxRef',
+    'SourceEventId',
+    'PayloadDigest',
+    'PreviousHash',
+    'EntryHash',
+  ];
   const rows = entries.map(entry => [
     entry.timestamp,
     entry.ledger,
+    entry.contractId,
     entry.user,
     entry.action,
     JSON.stringify(entry.details),
     entry.transactionHash,
+    entry.sourceEventId,
+    entry.payloadDigest,
+    entry.previousHash ?? '',
+    entry.hash ?? '',
   ]);
   
   const csvContent = [
@@ -195,7 +214,7 @@ export function exportToCSV(entries: AuditEntry[]): Blob {
   return new Blob([csvContent], { type: 'text/csv' });
 }
 
-export function exportToJSON(data: any): Blob {
+export function exportToJSON(data: unknown): Blob {
   const jsonString = JSON.stringify(data, null, 2);
   return new Blob([jsonString], { type: 'application/json' });
 }
@@ -235,7 +254,7 @@ export async function generateSOC2Report(reportData: {
   };
 
   const doc = generateSOC2ReportPDF(config, data);
-  return new Blob([doc.output('arraybuffer')], { type: 'application/pdf' });
+  return new Blob([doc.output('arraybuffer') as ArrayBuffer], { type: 'application/pdf' });
 }
 
 // Simplified wrapper for ISO27001 reports
@@ -273,6 +292,6 @@ export async function generateISO27001Report(reportData: {
   };
 
   const doc = generateISO27001ReportPDF(config, data);
-  return new Blob([doc.output('arraybuffer')], { type: 'application/pdf' });
+  return new Blob([doc.output('arraybuffer') as ArrayBuffer], { type: 'application/pdf' });
 }
 

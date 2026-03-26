@@ -5,7 +5,8 @@ import { generateSOC2Report } from '../utils/reportGenerator';
 import { useVaultContract } from '../hooks/useVaultContract';
 import { useToast } from '../hooks/useToast';
 import type { AuditEntry } from '../utils/auditVerification';
-import { buildAuditChain, signAuditData } from '../utils/auditVerification';
+import { prepareChainedAuditLog, signAuditData } from '../utils/auditVerification';
+import { env } from '../config/env';
 
 type ExportFormat = 'PDF' | 'CSV' | 'JSON';
 
@@ -19,7 +20,7 @@ interface ExportConfig {
 }
 
 const AuditExporter: React.FC = () => {
-  const { getVaultEvents } = useVaultContract();
+  const { getAllVaultEventsForAudit } = useVaultContract();
   const { notify } = useToast();
   
   const [auditData, setAuditData] = useState<AuditEntry[]>([]);
@@ -42,18 +43,8 @@ const AuditExporter: React.FC = () => {
   const fetchAuditData = async () => {
     setLoading(true);
     try {
-      const result = await getVaultEvents();
-      const auditEntries: AuditEntry[] = result.activities.map((activity, index) => ({
-        id: activity.id,
-        timestamp: activity.timestamp,
-        ledger: activity.ledger,
-        user: activity.actor || 'System',
-        action: activity.type,
-        details: activity.details,
-        transactionHash: activity.eventId || `tx_${index}`,
-      }));
-      
-      const chainedEntries = buildAuditChain(auditEntries);
+      const result = await getAllVaultEventsForAudit(2000);
+      const chainedEntries = prepareChainedAuditLog(result.activities, env.contractId);
       setAuditData(chainedEntries);
     } catch (err) {
       console.error('Failed to fetch audit data:', err);
@@ -116,20 +107,22 @@ const AuditExporter: React.FC = () => {
       }
 
       switch (config.format) {
-        case 'CSV':
+        case 'CSV': {
           blob = exportToCSV(filteredData);
           filename = `audit_export_${timestamp}.csv`;
           break;
+        }
         
-        case 'JSON':
+        case 'JSON': {
           const jsonData = config.includeSignature 
             ? { ...exportData, signature: signatureData }
             : exportData;
           blob = exportToJSON(jsonData);
           filename = `audit_export_${timestamp}.json`;
           break;
+        }
         
-        case 'PDF':
+        case 'PDF': {
           blob = await generateSOC2Report({
             entries: filteredData,
             dateRange: {
@@ -140,6 +133,7 @@ const AuditExporter: React.FC = () => {
           });
           filename = `audit_export_${timestamp}.pdf`;
           break;
+        }
         
         default:
           throw new Error('Invalid export format');

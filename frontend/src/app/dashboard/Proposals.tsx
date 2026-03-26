@@ -1,15 +1,23 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { ArrowUpRight, Clock, SearchX, Check, Loader2 } from 'lucide-react';
+import { ArrowUpRight, Clock, SearchX, Check, Loader2, GitCompare, FileText, Plus } from 'lucide-react';
 import type { NewProposalFormData } from '../../components/modals/NewProposalModal';
 import NewProposalModal from '../../components/modals/NewProposalModal';
 import ProposalDetailModal from '../../components/modals/ProposalDetailModal';
 import ConfirmationModal from '../../components/modals/ConfirmationModal';
 import ProposalFilters, { type FilterState } from '../../components/proposals/ProposalFilters';
+import ProposalComparison from '../../components/ProposalComparison';
 import { useToast } from '../../hooks/useToast';
 import { useVaultContract } from '../../hooks/useVaultContract';
-import { useWallet } from '../../context/WalletContextProps';
+import { useProposals } from '../../hooks/useProposals';
+import { useWallet } from '../../hooks/useWallet';
+import { useActionReadiness } from '../../hooks/useActionReadiness';
+import { useRealtime } from '../../contexts/RealtimeContext';
+import type { TokenInfo, TokenBalance } from '../../types';
+import { DEFAULT_TOKENS } from '../../constants/tokens';
+import VoiceCommands from '../../components/VoiceCommands';
+import ReadinessWarning from '../../components/ReadinessWarning';
 
 const CopyButton = ({ text }: { text: string }) => (
   <button
@@ -51,17 +59,27 @@ export interface Proposal {
 
 const Proposals: React.FC = () => {
   const { notify } = useToast();
-  const { rejectProposal, approveProposal, getTokenBalances, addCustomToken } = useVaultContract();
+  const { rejectProposal, approveProposal, getTokenBalances } = useVaultContract();
   const { address } = useWallet();
+  const { isReady, checkReady } = useActionReadiness();
+  const { subscribe, updatePresence, connectionStatus, trackEvent } = useRealtime();
 
-  const [proposals, setProposals] = useState<Proposal[]>([]);
-  const [loading, setLoading] = useState(false);
+  const {
+    proposals,
+    loading,
+    error: proposalsError,
+    refetch: refetchProposals,
+  } = useProposals();
+
+  const [localProposals, setLocalProposals] = useState<Proposal[]>([]);
   const [approvingIds, setApprovingIds] = useState<Set<string>>(new Set());
   const [showNewProposalModal, setShowNewProposalModal] = useState(false);
   const [selectedProposal, setSelectedProposal] = useState<Proposal | null>(null);
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
-  // const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
+  const [tokenBalances, setTokenBalances] = useState<TokenBalance[]>([]);
+  const [showComparison, setShowComparison] = useState(false);
+  const [selectedForComparison, setSelectedForComparison] = useState<Set<string>>(new Set());
 
   const [activeFilters, setActiveFilters] = useState<FilterState>({
     search: '',
@@ -77,7 +95,7 @@ const Proposals: React.FC = () => {
     amount: '',
     memo: '',
   });
-  // const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
+  const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null);
 
   // Fetch token balances
   useEffect(() => {
@@ -98,80 +116,66 @@ const Proposals: React.FC = () => {
     fetchBalances();
   }, [getTokenBalances]);
 
+  // Sync real proposals into local state (local state handles optimistic updates)
   useEffect(() => {
-    const fetchProposals = async () => {
-      setLoading(true);
-      try {
-        const mockData: Proposal[] = [
-          {
-            id: '1',
-            proposer: '0x123...456',
-            recipient: '0xabc...def',
-            amount: '100',
-            token: 'NATIVE',
-            tokenSymbol: 'XLM',
-            memo: 'Liquidity Pool Expansion',
-            status: 'Pending',
-            approvals: 1,
-            threshold: 3,
-            approvedBy: ['0x123...456'],
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '2',
-            proposer: '0x789...012',
-            recipient: '0xdef...ghi',
-            amount: '250',
-            token: 'USDC',
-            memo: 'Marketing Campaign',
-            status: 'Pending',
-            approvals: 2,
-            threshold: 3,
-            approvedBy: ['0x789...012', '0xaaa...bbb'],
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: '2',
-            proposer: '0x789...012',
-            recipient: '0xdef...abc',
-            amount: '500',
-            token: 'CCW67TSZV3SUUJZYHWVPQWJ7B5BODJHYKJRC5QK7L5HHQFJGVY7H3LRL',
-            tokenSymbol: 'USDC',
-            memo: 'Marketing Campaign Budget',
-            status: 'Approved',
-            approvals: 3,
-            threshold: 3,
-            approvedBy: ['0x789...012', '0xaaa...bbb', '0xccc...ddd'],
-            createdAt: new Date(Date.now() - 86400000).toISOString()
-          },
-          {
-            id: '3',
-            proposer: '0x345...678',
-            recipient: '0xghi...jkl',
-            amount: '250',
-            token: 'NATIVE',
-            tokenSymbol: 'XLM',
-            memo: 'Community Rewards Distribution',
-            status: 'Executed',
-            approvals: 3,
-            approvedBy: ['0x345...678', '0xaaa...bbb', '0xccc...ddd'],
-            threshold: 3,
-            createdAt: new Date(Date.now() - 172800000).toISOString()
-          }
-        ];
-        setProposals(mockData);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        setLoading(false);
-      }
+    setLocalProposals(proposals);
+  }, [proposals]);
+
+  // Subscribe to real-time proposal updates
+  useEffect(() => {
+    updatePresence('online', 'Proposals');
+
+    const unsubscribers = [
+      subscribe('proposal_created', (data: Proposal) => {
+        const eventId = `created-${data.id}`;
+        if (!trackEvent(eventId)) return;
+        setLocalProposals((prev) => [data, ...prev]);
+        notify('new_proposal', `New proposal #${data.id} created`, 'info');
+      }),
+      subscribe('proposal_updated', (data: { id: string; updates: Partial<Proposal> }) => {
+        setLocalProposals((prev) =>
+          prev.map((p) => (p.id === data.id ? { ...p, ...data.updates } : p))
+        );
+      }),
+      subscribe('proposal_approved', (data: { id: string; approver: string; eventId?: string }) => {
+        const eventId = data.eventId ?? `approved-${data.id}-${data.approver}`;
+        if (!trackEvent(eventId)) return;
+        setLocalProposals((prev) =>
+          prev.map((p) => {
+            if (p.id === data.id) {
+              if (p.approvedBy.includes(data.approver)) return p;
+              const newApprovals = p.approvals + 1;
+              const newApprovedBy = [...p.approvedBy, data.approver];
+              return {
+                ...p,
+                approvals: newApprovals,
+                approvedBy: newApprovedBy,
+                status: newApprovals >= p.threshold ? 'Approved' : p.status,
+              };
+            }
+            return p;
+          })
+        );
+        notify('proposal_approved', `Proposal #${data.id} approved`, 'success');
+      }),
+      subscribe('proposal_rejected', (data: { id: string; eventId?: string }) => {
+        const eventId = data.eventId ?? `rejected-${data.id}`;
+        if (!trackEvent(eventId)) return;
+        setLocalProposals((prev) =>
+          prev.map((p) => (p.id === data.id ? { ...p, status: 'Rejected' } : p))
+        );
+        notify('proposal_rejected', `Proposal #${data.id} rejected`, 'error');
+      }),
+    ];
+
+    return () => {
+      unsubscribers.forEach((unsub) => unsub());
     };
-    fetchProposals();
-  }, []);
+  }, [subscribe, updatePresence, notify]);
 
   // Filter proposals by token and other filters
   const filteredProposals = useMemo(() => {
-    const filtered = proposals.filter((p) => {
+    const filtered = localProposals.filter((p) => {
       // Search filter
       const searchLower = activeFilters.search.toLowerCase();
       const matchesSearch =
@@ -212,13 +216,20 @@ const Proposals: React.FC = () => {
         default: return dateB - dateA;
       }
     });
-  }, [proposals, activeFilters]);
+  }, [localProposals, activeFilters]);
 
   const handleRejectConfirm = async () => {
     if (!rejectingId) return;
+    const { ready, message } = checkReady();
+    if (!ready) {
+      notify('proposal_rejected', message ?? 'Not ready', 'error');
+      setShowRejectModal(false);
+      setRejectingId(null);
+      return;
+    }
     try {
       await rejectProposal(Number(rejectingId));
-      setProposals(prev => prev.map(p => p.id === rejectingId ? { ...p, status: 'Rejected' } : p));
+      setLocalProposals(prev => prev.map(p => p.id === rejectingId ? { ...p, status: 'Rejected' } : p));
       notify('proposal_rejected', `Proposal #${rejectingId} rejected`, 'success');
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to reject';
@@ -231,18 +242,19 @@ const Proposals: React.FC = () => {
 
   const handleApprove = async (proposalId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!address) {
-      notify('proposal_rejected', 'Wallet not connected', 'error');
+    const { ready, message } = checkReady();
+    if (!ready) {
+      notify('proposal_rejected', message ?? 'Not ready', 'error');
       return;
     }
 
     setApprovingIds(prev => new Set(prev).add(proposalId));
     try {
       await approveProposal(Number(proposalId));
-      setProposals(prev => prev.map(p => {
+      setLocalProposals(prev => prev.map(p => {
         if (p.id === proposalId) {
           const newApprovals = p.approvals + 1;
-          const newApprovedBy = [...p.approvedBy, address];
+          const newApprovedBy = [...p.approvedBy, address!];
           return {
             ...p,
             approvals: newApprovals,
@@ -265,34 +277,6 @@ const Proposals: React.FC = () => {
     }
   };
 
-  const handleTokenSelect = (token: TokenInfo) => {
-    setNewProposalForm(prev => ({ ...prev, token: token.address }));
-    setSelectedToken(token);
-  };
-
-  // Find the selected token balance
-  const selectedTokenBalance = useMemo(() => {
-    if (!selectedToken) return null;
-    return tokenBalances.find(tb => tb.token.address === selectedToken.address);
-  }, [tokenBalances, selectedToken]);
-
-  // Compute amount error
-  const amountError = useMemo(() => {
-    if (newProposalForm.amount && selectedTokenBalance) {
-      const amount = parseFloat(newProposalForm.amount);
-      const balance = parseFloat(selectedTokenBalance.balance);
-
-      if (isNaN(amount)) {
-        return 'Please enter a valid amount';
-      } else if (amount <= 0) {
-        return 'Amount must be greater than 0';
-      } else if (amount > balance) {
-        return `Insufficient balance. Available: ${formatTokenBalance(balance, selectedTokenBalance.token.decimals)} ${selectedTokenBalance.token.symbol}`;
-      }
-    }
-    return null;
-  }, [newProposalForm.amount, selectedTokenBalance]);
-
   // Initialize selected token when tokenBalances load
   useEffect(() => {
     if (!selectedToken && tokenBalances.length > 0) {
@@ -305,45 +289,115 @@ const Proposals: React.FC = () => {
     }
   }, [selectedToken, tokenBalances]);
 
-  const handleAddCustomToken = async (address: string): Promise<TokenInfo | null> => {
-    try {
-      const tokenInfo = await addCustomToken?.(address);
-      if (tokenInfo) {
-        // Refresh token balances
-        const balances = await getTokenBalances();
-        setTokenBalances(balances.map((b: TokenBalance) => ({ ...b, isLoading: false })));
-      }
-      return tokenInfo ?? null;
-    } catch (error) {
-      console.error('Failed to add custom token:', error);
-      throw error;
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gray-900 p-6 text-white">
       <div className="max-w-7xl mx-auto">
+        <ReadinessWarning />
+        {connectionStatus === 'connecting' && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg bg-yellow-500/10 border border-yellow-500/30 px-4 py-2 text-sm text-yellow-400">
+            <Loader2 size={14} className="animate-spin" />
+            Reconnecting to realtime updates…
+          </div>
+        )}
+        {connectionStatus === 'error' && (
+          <div className="mb-4 rounded-lg bg-red-500/10 border border-red-500/30 px-4 py-2 text-sm text-red-400">
+            Realtime updates unavailable. Data may be stale.
+          </div>
+        )}
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold">Proposals</h1>
-          <button onClick={() => setShowNewProposalModal(true)} className="bg-purple-600 hover:bg-purple-700 px-6 py-2 rounded-lg transition">
-            New Proposal
-          </button>
+          <div className="flex items-center gap-3">
+            {selectedForComparison.size > 0 && (
+              <button
+                onClick={() => setShowComparison(true)}
+                className="bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded-lg transition flex items-center gap-2"
+              >
+                <GitCompare size={18} />
+                <span>Compare ({selectedForComparison.size})</span>
+              </button>
+            )}
+            <button
+              onClick={() => {
+                const { ready, message } = checkReady();
+                if (!ready) { notify('proposal_rejected', message ?? 'Not ready', 'error'); return; }
+                setShowNewProposalModal(true);
+              }}
+              disabled={!isReady}
+              className="bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed px-6 py-2 rounded-lg transition"
+            >
+              New Proposal
+            </button>
+          </div>
         </div>
 
         <ProposalFilters proposalCount={filteredProposals.length} onFilterChange={setActiveFilters} />
 
         <div className="mt-6 grid grid-cols-1 gap-4">
-          {filteredProposals.length > 0 ? (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4 bg-gray-800/20 rounded-3xl border border-dashed border-gray-700">
+              <Loader2 size={40} className="text-purple-400 animate-spin mb-4" />
+              <p className="text-gray-400 text-lg font-medium">Loading proposals...</p>
+            </div>
+          ) : proposalsError ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4 bg-gray-800/20 rounded-3xl border border-dashed border-red-700/50">
+              <p className="text-red-400 text-lg font-medium mb-3">{proposalsError}</p>
+              <button
+                onClick={() => void refetchProposals()}
+                className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg text-sm transition"
+              >
+                Retry
+              </button>
+            </div>
+          ) : filteredProposals.length > 0 ? (
             filteredProposals.map((prop) => {
               const isApproving = approvingIds.has(prop.id);
               const hasUserApproved = address ? prop.approvedBy.includes(address) : false;
               const progressPercent = (prop.approvals / prop.threshold) * 100;
 
               return (
-                <div key={prop.id} onClick={() => setSelectedProposal(prop)} className="bg-gray-800/50 p-5 rounded-2xl border border-gray-700 hover:border-purple-500/50 cursor-pointer transition-all hover:scale-[1.01] group">
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                      <div className="flex items-center gap-4 flex-1">
+                <div key={prop.id} className="bg-gray-800/50 p-5 rounded-2xl border border-gray-700 hover:border-purple-500/50 transition-all group relative">
+                  {/* Checkbox for comparison */}
+                  <div className="absolute top-4 right-4 z-10">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const newSelection = new Set(selectedForComparison);
+                        if (newSelection.has(prop.id)) {
+                          newSelection.delete(prop.id);
+                        } else {
+                          if (newSelection.size < 5) {
+                            newSelection.add(prop.id);
+                          }
+                        }
+                        setSelectedForComparison(newSelection);
+                      }}
+                      className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-colors ${
+                        selectedForComparison.has(prop.id)
+                          ? 'bg-blue-600 border-blue-600'
+                          : 'border-gray-600 hover:border-blue-500'
+                      }`}
+                      title="Select for comparison"
+                    >
+                      {selectedForComparison.has(prop.id) && (
+                        <svg
+                          className="w-4 h-4 text-white"
+                          fill="none"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth="2"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path d="M5 13l4 4L19 7" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+
+                  <div onClick={() => setSelectedProposal(prop)} className="cursor-pointer">
+                    <div className="flex flex-col gap-4">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div className="flex items-center gap-4 flex-1">
                         <div className="p-3 bg-gray-900 rounded-xl text-purple-400 group-hover:bg-purple-600 group-hover:text-white transition-colors">
                           <ArrowUpRight size={20} />
                         </div>
@@ -359,12 +413,12 @@ const Proposals: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-                        <StatusBadge status={prop.status} />
+                        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
+                          <StatusBadge status={prop.status} />
+                        </div>
                       </div>
-                    </div>
 
-                    {prop.status === 'Pending' && (
+                      {prop.status === 'Pending' && (
                       <div className="flex flex-col gap-3 pt-3 border-t border-gray-700/50">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div className="flex-1">
@@ -434,14 +488,40 @@ const Proposals: React.FC = () => {
                         </div>
                       </div>
                     )}
+                    </div>
                   </div>
                 </div>
               );
             })
+          ) : localProposals.length === 0 ? (
+            // True empty state — no proposals exist at all
+            <div className="flex flex-col items-center justify-center py-20 px-4 bg-gray-800/20 rounded-3xl border border-dashed border-gray-700">
+              <div className="p-5 bg-gray-800/60 rounded-2xl mb-6">
+                <FileText size={48} className="text-purple-400" />
+              </div>
+              <h3 className="text-white text-xl font-semibold mb-2">No proposals yet</h3>
+              <p className="text-gray-400 text-sm text-center max-w-sm mb-8">
+                This vault has no proposals. Create the first one to start the approval process.
+              </p>
+              <button
+                onClick={() => {
+                  const { ready, message } = checkReady();
+                  if (!ready) { notify('proposal_rejected', message ?? 'Not ready', 'error'); return; }
+                  setShowNewProposalModal(true);
+                }}
+                disabled={!isReady}
+                className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-700 disabled:cursor-not-allowed px-6 py-3 rounded-lg font-medium transition min-h-[44px]"
+              >
+                <Plus size={18} />
+                Create First Proposal
+              </button>
+            </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-12 px-4 bg-gray-800/20 rounded-3xl border border-dashed border-gray-700">
+            // Filtered empty state — proposals exist but none match current filters
+            <div className="flex flex-col items-center justify-center py-16 px-4 bg-gray-800/20 rounded-3xl border border-dashed border-gray-700">
               <SearchX size={48} className="text-gray-600 mb-4" />
               <p className="text-gray-400 text-lg font-medium">No proposals match your filters</p>
+              <p className="text-gray-500 text-sm mt-1">Try adjusting or clearing your filters</p>
             </div>
           )}
         </div>
@@ -459,6 +539,21 @@ const Proposals: React.FC = () => {
         />
         <ProposalDetailModal isOpen={!!selectedProposal} onClose={() => setSelectedProposal(null)} proposal={selectedProposal} />
         <ConfirmationModal isOpen={showRejectModal} title="Reject Proposal" message="Are you sure you want to reject this?" onConfirm={handleRejectConfirm} onCancel={() => setShowRejectModal(false)} showReasonInput={true} isDestructive={true} />
+        {showComparison && (
+          <ProposalComparison
+            proposals={localProposals}
+            selectedIds={selectedForComparison}
+            onClose={() => setShowComparison(false)}
+            onSelectionChange={setSelectedForComparison}
+          />
+        )}
+
+        <VoiceCommands 
+          onCreateProposal={() => setShowNewProposalModal(true)}
+          onApprove={() => selectedProposal && handleApprove(selectedProposal.id, {} as React.MouseEvent)}
+          onReject={() => selectedProposal && setShowRejectModal(true)}
+        />
+
       </div>
     </div>
   );
