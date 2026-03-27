@@ -1045,3 +1045,29 @@ pub fn emit_dispute_resolved(env: &Env, dispute_id: u64, arbitrator: &Address, r
         (arbitrator.clone(), resolution),
     );
 }
+
+pub fn emit_permission_granted(env: &Env, admin: &Address, target: &Address, permission: u32) {
+    env.events().publish(
+        (Symbol::new(env, "permission_granted"),),
+        (admin.clone(), target.clone(), permission),
+    );
+}
+
+pub fn emit_permission_revoked(env: &Env, admin: &Address, target: &Address, permission: u32) {
+    env.events().publish(
+        (Symbol::new(env, "permission_revoked"),),
+        (admin.clone(), target.clone(), permission),
+    );
+}
+
+pub fn emit_permission_delegated(
+    env: &Env,
+    delegator: &Address,
+    delegatee: &Address,
+    permission: u32,
+) {
+    env.events().publish(
+        (Symbol::new(env, "permission_delegated"),),
+        (delegator.clone(), delegatee.clone(), permission),
+    );
+}
