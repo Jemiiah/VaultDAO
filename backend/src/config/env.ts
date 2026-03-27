@@ -10,6 +10,7 @@ export interface BackendEnv {
   readonly eventPollingIntervalMs: number;
   readonly eventPollingEnabled: boolean;
   readonly corsOrigin: string[];
+  readonly requestBodyLimit: string;
 }
 
 const DEFAULT_CONTRACT_ID =
@@ -135,6 +136,7 @@ export function loadEnv(): BackendEnv {
   const eventPollingIntervalMs = readPort("EVENT_POLLING_INTERVAL_MS", 10000, issues);
   const eventPollingEnabled = readString("EVENT_POLLING_ENABLED", "true") === "true";
   const corsOrigin = readCommaSeparatedString("CORS_ORIGIN", nodeEnv === "production" ? [] : ["*"]);
+  const requestBodyLimit = readString("REQUEST_BODY_LIMIT", "10kb");
 
   validateRequiredString("HOST", host, issues);
   validateAllowedValue("NODE_ENV", nodeEnv, ALLOWED_NODE_ENVS, issues);
@@ -167,5 +169,6 @@ export function loadEnv(): BackendEnv {
     eventPollingIntervalMs,
     eventPollingEnabled,
     corsOrigin,
+    requestBodyLimit,
   };
 }
