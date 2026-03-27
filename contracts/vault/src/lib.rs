@@ -2998,6 +2998,11 @@ impl VaultDAO {
             return Err(VaultError::Unauthorized);
         }
 
+        // Reject empty tags - Symbol("") is invalid per SDK
+        if tag == Symbol::new(&env, "") {
+            return Err(VaultError::MetadataValueInvalid);
+        }
+
         if proposal.tags.contains(&tag) {
             return Err(VaultError::AlreadyApproved); // duplicate tag
         }
